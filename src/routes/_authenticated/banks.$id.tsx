@@ -69,18 +69,61 @@ function BankPage() {
               <Td>{s.opinions}</Td><Td>{s.notSubmitted}</Td><Td>{s.bills}</Td>
               <Td>{inr(s.billed)}</Td><Td>{inr(s.received)}</Td><Td className="font-semibold">{inr(s.outstanding)}</Td>
               <Td>{s.unpaid}</Td><Td>{s.partial}</Td><Td>{s.paid}</Td>
+
               <Td>
                 {can && (
-                  <div className="flex gap-1">
-                    <Button size="sm" variant="ghost" onClick={() => setEdit(b)}>Edit</Button>
-                    <Button size="sm" variant="ghost" onClick={async () => {
-                      const { error } = await supabase.from("branches").update({ active: !b.active }).eq("id", b.id);
-                      if (error) return toast.error(errMsg(error));
-                      qc.invalidateQueries({ queryKey: ["branches"] });
-                    }}>{b.active ? "Deactivate" : "Activate"}</Button>
+                  <div className="flex items-center gap-2 whitespace-nowrap">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setEdit(b)}
+                    >
+                      Edit
+                    </Button>
+
+                    
+
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={async () => {
+                        const linkedOpinions = ops.filter(
+                          (opinion) => opinion.branch_id === b.id
+                        );
+
+                        if (linkedOpinions.length > 0) {
+                          toast.error(
+                            "This branch has linked opinions. Deactivate it instead of deleting it."
+                          );
+                          return;
+                        }
+
+                        const confirmed = window.confirm(
+                          `Delete branch "${b.name}"?\n\nThis action cannot be undone.`
+                        );
+
+                        if (!confirmed) return;
+
+                        const { error } = await supabase
+                          .from("branches")
+                          .delete()
+                          .eq("id", b.id);
+
+                        if (error) {
+                          toast.error(errMsg(error));
+                          return;
+                        }
+
+                        await qc.invalidateQueries({ queryKey: ["branches"] });
+                        toast.success("Branch deleted");
+                      }}
+                    >
+                      Delete
+                    </Button>
                   </div>
                 )}
               </Td>
+
             </tr>
           );
         })}

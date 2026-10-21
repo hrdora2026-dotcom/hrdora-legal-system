@@ -71,18 +71,83 @@ function Banks() {
               <Td>{inr(s.received)}</Td>
               <Td className="font-semibold">{inr(s.outstanding)}</Td>
               <Td>{b.active ? "Active" : "Inactive"}</Td>
+
               <Td>
                 {can && (
-                  <div className="flex gap-1">
-                    <Button size="sm" variant="ghost" onClick={() => setEdit(b)}>Edit</Button>
-                    <Button size="sm" variant="ghost" onClick={async () => {
-                      const { error } = await supabase.from("banks").update({ active: !b.active }).eq("id", b.id);
-                      if (error) return toast.error(errMsg(error));
-                      qc.invalidateQueries({ queryKey: ["banks"] });
-                    }}>{b.active ? "Deactivate" : "Activate"}</Button>
+                  <div className="flex flex-wrap gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setEdit(b)}
+                    >
+                      Edit
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={async () => {
+                        const { error } = await supabase
+                          .from("banks")
+                          .update({ active: !b.active })
+                          .eq("id", b.id);
+
+                        if (error) return toast.error(errMsg(error));
+
+                        await qc.invalidateQueries({ queryKey: ["banks"] });
+                        toast.success(b.active ? "Bank deactivated" : "Bank activated");
+                      }}
+                    >
+                      {b.active ? "Deactivate" : "Activate"}
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={async () => {
+                        const linkedBranches = branches.filter(
+                          (branch) => branch.bank_id === b.id
+                        );
+
+                        const linkedOpinions = ops.filter(
+                          (opinion) => opinion.bank_id === b.id
+                        );
+
+                        if (linkedBranches.length > 0 || linkedOpinions.length > 0) {
+                          toast.error(
+                            "This bank has linked branches or opinions. Deactivate it instead of deleting it."
+                          );
+                          return;
+                        }
+
+                        if (
+                          !window.confirm(
+                            `Delete bank "${b.name}"?\n\nThis action cannot be undone.`
+                          )
+                        ) {
+                          return;
+                        }
+
+                        const { error } = await supabase
+                          .from("banks")
+                          .delete()
+                          .eq("id", b.id);
+
+                        if (error) {
+                          toast.error(errMsg(error));
+                          return;
+                        }
+
+                        await qc.invalidateQueries({ queryKey: ["banks"] });
+                        toast.success("Bank deleted");
+                      }}
+                    >
+                      Delete
+                    </Button>
                   </div>
                 )}
               </Td>
+
             </tr>
           );
         })}

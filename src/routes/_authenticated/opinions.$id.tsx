@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card2, DataTable, Field, Loading, OpinionBadge, PageHeader, PayBadge, Td } from "@/components/app/ui";
 import { OpinionForm } from "@/components/app/OpinionForm";
@@ -104,6 +105,53 @@ function OpinionPage() {
     }
   }
 
+
+ 
+
+  // PASTE THE deleteOpinion FUNCTION HERE
+  async function deleteOpinion() {
+    if (busy) return;
+
+    if (bills.length > 0) {
+      toast.error(
+        "This opinion has bills linked to it. Deletion is blocked to preserve billing history."
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete opinion ${op.opinion_no} for ${op.borrower_name}?\n\nThis action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    setBusy(true);
+
+    try {
+      const { error } = await supabase
+        .from("opinions")
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["opinions"] }),
+        qc.invalidateQueries({ queryKey: ["audit"] }),
+        qc.invalidateQueries({ queryKey: ["docs", id] }),
+        qc.invalidateQueries({ queryKey: ["bill_summary"] }),
+      ]);
+
+      toast.success("Opinion deleted.");
+      await navigate({ to: "/opinions" });
+    } catch (error) {
+      toast.error(errMsg(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+
   const docs = useQuery({
     queryKey: ["docs", id],
     queryFn: async () => (await supabase.from("opinion_documents").select("*").eq("opinion_id", id).order("created_at")).data ?? [],
@@ -121,8 +169,27 @@ function OpinionPage() {
         actions={
           <>
             <OpinionBadge s={op.status} />
-            <Button variant="outline" onClick={() => setEditing(!editing)}>
+
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() => setEditing(!editing)}
+            >
               {editing ? "Cancel edit" : "Edit opinion"}
+            </Button>
+
+            <Button
+              variant="destructive"
+              disabled={busy || bills.length > 0}
+              onClick={deleteOpinion}
+              title={
+                bills.length > 0
+                  ? "Cannot delete an opinion with linked bills"
+                  : "Delete opinion"
+              }
+            >
+              <Trash2 className="mr-1 h-4 w-4" />
+              Delete opinion
             </Button>
           </>
         }
@@ -304,7 +371,7 @@ function OpinionPage() {
         </form>
       </Card2>
 
-      
+
     </div>
   );
 }

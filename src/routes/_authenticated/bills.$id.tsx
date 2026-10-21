@@ -109,6 +109,52 @@ function BillPage() {
                 refresh();
               }}>Reopen as draft</Button>
             )}
+            {me.isAdmin && (
+              <Button
+                variant="destructive"
+                disabled={
+                  bill.bill_status !== "draft" ||
+                  pays.length > 0 ||
+                  adjs.length > 0 ||
+                  (notes.data?.length ?? 0) > 0
+                }
+                title="Only draft bills without payment, adjustment, or follow-up history can be deleted"
+                onClick={async () => {
+                  if (
+                    bill.bill_status !== "draft" ||
+                    pays.length > 0 ||
+                    adjs.length > 0 ||
+                    (notes.data?.length ?? 0) > 0
+                  ) {
+                    toast.error("This bill cannot be deleted because of its status or related records.");
+                    return;
+                  }
+
+                  if (!window.confirm(
+                    `Delete draft bill ${bill.bill_no} for ${bill.borrower_name}? This action cannot be undone.`
+                  )) {
+                    return;
+                  }
+
+                  const { error } = await supabase.rpc("delete_draft_bill", {
+                    p_bill_id: id,
+                  });
+
+                  if (error) {
+                    toast.error(errMsg(error));
+                    return;
+                  }
+
+                  toast.success("Draft bill deleted.");
+                  await refresh();
+                  window.location.assign("/bills");
+                }}
+              >
+                <Trash2 className="mr-1 h-4 w-4" />
+                Delete Bill
+              </Button>
+            )}
+
             {finalized && me.can("record_payments") && Number(bill.outstanding) > 0 && (
               <Button asChild className="bg-gold text-gold-foreground hover:bg-gold/90">
                 <Link to="/payments/record" search={{ bill: id }}>Record payment</Link>
