@@ -47,6 +47,10 @@ function BillPage() {
   const [reverse, setReverse] = useState<{ kind: "payment" | "adjustment"; id: string } | null>(null);
   const [reason, setReason] = useState("");
   const [adjOpen, setAdjOpen] = useState(false);
+  const [finalizeOpen, setFinalizeOpen] = useState(false);
+  const [submissionDate, setSubmissionDate] = useState(todayIST());
+  const [submissionRef, setSubmissionRef] = useState("");
+  const [submissionChoice, setSubmissionChoice] = useState<"not_submitted" | "submitted">("not_submitted");
 
   if (!bill || !me) return <Loading />;
   const editable = bill.bill_status === "draft" || me.isAdmin;
@@ -92,11 +96,10 @@ function BillPage() {
             {!finalized && (
               <Button
                 disabled={!items.data?.length}
-                onClick={async () => {
-                  const { error } = await supabase.from("bills").update({ status: "finalized" }).eq("id", id);
-                  if (error) return toast.error(errMsg(error));
-                  toast.success("Bill finalized");
-                  refresh();
+                onClick={() => {
+                  setSubmissionDate(todayIST());
+                  setSubmissionRef("");
+                  setFinalizeOpen(true);
                 }}
               >
                 Finalize bill
@@ -136,7 +139,11 @@ function BillPage() {
                     return;
                   }
 
-                  const { error } = await supabase.rpc("delete_draft_bill", {
+                  const deleteDraftBill = supabase.rpc as unknown as (
+                    functionName: string,
+                    args: { p_bill_id: string },
+                  ) => PromiseLike<{ error: { message: string } | null }>;
+                  const { error } = await deleteDraftBill("delete_draft_bill", {
                     p_bill_id: id,
                   });
 
@@ -315,6 +322,121 @@ function BillPage() {
           <Button variant="destructive" disabled={reason.trim().length < 3} onClick={doReverse}>Confirm reversal</Button>
         </DialogContent>
       </Dialog>
+
+
+      <Dialog open={finalizeOpen} onOpenChange={setFinalizeOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Finalize Bill & Submission Details</DialogTitle>
+          </DialogHeader>
+
+          <p className="text-sm text-muted-foreground">
+            Confirm whether this opinion has actually been submitted to the bank.
+            Do not mark it submitted until submission is confirmed.
+          </p>
+
+          <form
+            className="space-y-3"
+            onSubmit={async (e) => {
+              e.preventDefault();
+
+              const opinionId = bill.opinion_id;
+              if (!opinionId) {
+                toast.error("This bill is not linked to an opinion.");
+                return;
+              }
+
+              const { error: billError } = await supabase
+                .from("bills")
+                .update({ status: "finalized" })
+                .eq("id", id)
+                .eq("status", "draft");
+
+              if (billError) {
+                toast.error(errMsg(billError));
+                return;
+              }
+
+
+              const { error: opinionError } = await supabase
+                .from("opinions")
+                .update(
+                  submissionChoice === "submitted"
+                    ? {
+                      status: "submitted",
+                      submission_date: submissionDate,
+                      submission_ref: submissionRef.trim() || null,
+                    }
+                    : {
+                      status: "ready",
+                      submission_date: null,
+                      submission_ref: null,
+                    }
+                )
+                .eq("id", opinionId);
+
+
+              if (opinionError) {
+                toast.error(
+                  "Bill was finalized, but submission details could not be saved: " +
+                  errMsg(opinionError)
+                );
+                refresh();
+                return;
+              }
+
+              toast.success("Bill finalized and submission details saved.");
+              setFinalizeOpen(false);
+              refresh();
+            }}
+          >
+
+            <Field label="Submission Status">
+              <NativeSelect
+                value={submissionChoice}
+                onChange={(e) =>
+                  setSubmissionChoice(
+                    e.target.value as "not_submitted" | "submitted"
+                  )
+                }
+              >
+                <option value="not_submitted">Not Yet Submitted</option>
+                <option value="submitted">Submitted to Bank</option>
+              </NativeSelect>
+            </Field>
+
+
+            <Field label="Submission date">
+              <Input
+                type="date"
+                required
+                value={submissionDate}
+                onChange={(e) => setSubmissionDate(e.target.value)}
+              />
+            </Field>
+
+            <Field label="Bank submission reference (optional)">
+              <Input
+                value={submissionRef}
+                onChange={(e) => setSubmissionRef(e.target.value)}
+                placeholder="Enter bank receipt / reference number"
+              />
+            </Field>
+
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setFinalizeOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit">Confirm & Finalize</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
 
       <AdjustDialog open={adjOpen} onClose={() => setAdjOpen(false)} billId={id} outstanding={Number(bill.outstanding)} onDone={refresh} />
     </div>

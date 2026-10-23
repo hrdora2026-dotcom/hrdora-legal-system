@@ -28,6 +28,39 @@ function Register() {
     return m;
   }, [bills.data]);
 
+
+  const financialByOp = useMemo(() => {
+    const totals = new Map<
+      string,
+      { billed: number; paid: number; outstanding: number }
+    >();
+
+    for (const b of bills.data ?? []) {
+      if (b.bill_status !== "finalized" || !b.opinion_id) continue;
+
+      const current = totals.get(b.opinion_id) ?? {
+        billed: 0,
+        paid: 0,
+        outstanding: 0,
+      };
+
+      current.billed += Number(b.total ?? 0);
+      current.paid += Number(b.received ?? 0);
+      current.outstanding += Number(b.outstanding ?? 0);
+
+      totals.set(b.opinion_id, current);
+    }
+
+    return totals;
+  }, [bills.data]);
+
+  const formatAmount = (amount: number) =>
+    `₹${amount.toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+
+
   const rows = useMemo(() => {
     const q = f.q.trim().toLowerCase();
     return (ops.data ?? []).filter((o) => {
@@ -66,11 +99,14 @@ function Register() {
                     { header: "Bank", value: (o) => L.bankName(o.bank_id) },
                     { header: "Branch", value: (o) => L.branchName(o.branch_id) },
                     { header: "Docs Received", value: (o) => fmtDate(o.docs_received_date) },
-                    { header: "Status", value: (o) => OPINION_STATUS[o.status] },
+                    {
+                      header: "Status",
+                      value: (o) => OPINION_STATUS[o.status] ?? o.status,
+                    },
                     { header: "Submission Date", value: (o) => fmtDate(o.submission_date) },
                     { header: "Submission Ref", value: (o) => o.submission_ref },
                     { header: "Assigned", value: (o) => L.userName(o.assigned_to) },
-                    { header: "Payment", value: (o) => PAYMENT_STATUS[payByOp.get(o.id) ?? ""] ?? "No bill" },
+                    { header: "Payment", value: (o) => PAYMENT_STATUS[payByOp.get(o.id) as keyof typeof PAYMENT_STATUS] ?? "No bill" },
                     { header: "Remarks", value: (o) => o.remarks },
                   ],
                   "opinion-register",
@@ -164,20 +200,78 @@ function Register() {
         </Field>
 
       </div>
-      <DataTable head={["Opinion No", "Borrower", "Service Type", "Bank", "Branch", "Received", "Status", "Submitted", "Assigned", "Payment"]} empty={!rows.length}>
-        {rows.slice(0, 500).map((o) => (
-          <tr key={o.id} className="hover:bg-muted/50">
-            <Td><Link to="/opinions/$id" params={{ id: o.id }} className="font-medium text-primary hover:underline">{o.opinion_no}</Link></Td>
-            <Td className="font-medium">{o.borrower_name}</Td><Td>{serviceLabel(o.service_type)}</Td>
-            <Td>{L.bankName(o.bank_id)}</Td>
-            <Td>{L.branchName(o.branch_id)}</Td>
-            <Td>{fmtDate(o.docs_received_date)}</Td>
-            <Td><OpinionBadge s={o.status} /></Td>
-            <Td>{fmtDate(o.submission_date)}</Td>
-            <Td>{L.userName(o.assigned_to)}</Td>
-            <Td><PayBadge s={payByOp.get(o.id)} /></Td>
-          </tr>
-        ))}
+      <DataTable
+        head={[
+          "S.No.",
+          "Opinion No",
+          "Borrower",
+          "Service Type",
+          "Bank",
+          "Branch",
+          "Received",
+          "Status",
+          "Submitted",
+          "Assigned",
+          "Payment",
+          "Billed Amount",
+          "Paid Amount",
+          "Outstanding Amount",
+        ]}
+        empty={!rows.length}
+      >
+
+        {rows.slice(0, 500).map((o, index) => {
+          const money = financialByOp.get(o.id) ?? {
+            billed: 0,
+            paid: 0,
+            outstanding: 0,
+          };
+
+          const stickyBase =
+            "sticky z-10 bg-card px-3 py-2 whitespace-nowrap";
+
+          return (
+            <tr key={o.id} className="hover:bg-muted/50">
+              <Td className={`${stickyBase} left-0 w-16 min-w-16 border-r`}>
+                {index + 1}
+              </Td>
+
+              <Td className={`${stickyBase} left-16 min-w-40 border-r`}>
+                <Link
+                  to="/opinions/$id"
+                  params={{ id: o.id }}
+                  className="font-medium text-primary hover:underline"
+                >
+                  {o.opinion_no}
+                </Link>
+              </Td>
+
+              <Td className={`${stickyBase} left-56 min-w-48 border-r font-medium`}>
+                {o.borrower_name}
+              </Td>
+
+              <Td>{serviceLabel(o.service_type)}</Td>
+              <Td>{L.bankName(o.bank_id)}</Td>
+              <Td>{L.branchName(o.branch_id)}</Td>
+              <Td>{fmtDate(o.docs_received_date)}</Td>
+              <Td><OpinionBadge s={o.status} /></Td>
+              <Td>{fmtDate(o.submission_date)}</Td>
+              <Td>{L.userName(o.assigned_to)}</Td>
+              <Td><PayBadge s={payByOp.get(o.id)} /></Td>
+
+              <Td className="text-right font-medium">
+                {formatAmount(money.billed)}
+              </Td>
+              <Td className="text-right">
+                {formatAmount(money.paid)}
+              </Td>
+              <Td className="text-right font-medium">
+                {formatAmount(money.outstanding)}
+              </Td>
+            </tr>
+          );
+        })}
+
       </DataTable>
       {rows.length > 500 && <p className="mt-2 text-xs text-muted-foreground">Showing first 500 rows — refine filters or export for the full list.</p>}
     </div>

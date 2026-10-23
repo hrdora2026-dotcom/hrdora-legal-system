@@ -114,8 +114,8 @@ export function makeUuid(): string {
 export const OPINION_STATUS = {
   received: "Received",
   in_progress: "In Progress",
-  ready_for_submission: "Ready for Submission",
-  submitted: "Submitted",
+  ready: "Not Yet Submitted",
+  submitted: "Submitted to Bank",
   on_hold: "On Hold",
 } as const;
 
@@ -126,7 +126,7 @@ export const PAYMENT_STATUS = {
 } as const;
 
 export const CHARGE_CATEGORY = {
-  legal_opinion: "Legal Opinion",
+  legal_opinion: "Legal Opinion Charges",
   ec: "EC",
   single_search: "Single Search",
   document: "Document",

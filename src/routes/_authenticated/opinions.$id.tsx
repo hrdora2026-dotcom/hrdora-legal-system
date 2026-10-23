@@ -8,7 +8,6 @@ import { Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card2, DataTable, Field, Loading, OpinionBadge, PageHeader, PayBadge, Td } from "@/components/app/ui";
 import { OpinionForm } from "@/components/app/OpinionForm";
-import { ChangeHistory } from "@/components/app/History";
 import { useBillSummary, useLookups, useOpinions } from "@/lib/data";
 import { serviceLabel } from "@/lib/services";
 import { errMsg, fmtDate, inr, todayIST } from "@/lib/format";
@@ -71,8 +70,12 @@ function OpinionPage() {
     setSubmissionBusy(true);
 
     try {
-      const update = {
-        status: submissionChoice,
+      const update: {
+        status: "submitted" | "ready";
+        submission_date: string | null;
+        submission_ref: string | null;
+      } = {
+        status: submissionChoice === "submitted" ? "submitted" : "ready",
         submission_date:
           submissionChoice === "submitted" ? submissionDate : null,
         submission_ref:
@@ -81,17 +84,30 @@ function OpinionPage() {
             : null,
       };
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("opinions")
         .update(update)
-        .eq("id", id);
+        .eq("id", id)
+        .select("id, opinion_no, status, submission_date, submission_ref")
+        .maybeSingle();
 
       if (error) throw error;
+
+      if (!data) {
+        throw new Error(
+          "No opinion was updated. Check your login, permissions, and opinion ID."
+        );
+      }
+
+      console.log("Saved submission status:", data);
 
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["opinions"] }),
         qc.invalidateQueries({ queryKey: ["audit"] }),
+        qc.invalidateQueries({ queryKey: ["bill_summary"] }),
       ]);
+
+      await qc.refetchQueries({ queryKey: ["opinions"], type: "active" });
 
       toast.success(
         submissionChoice === "submitted"
@@ -106,11 +122,12 @@ function OpinionPage() {
   }
 
 
- 
+
 
   // PASTE THE deleteOpinion FUNCTION HERE
   async function deleteOpinion() {
     if (busy) return;
+    if (!op) return;
 
     if (bills.length > 0) {
       toast.error(

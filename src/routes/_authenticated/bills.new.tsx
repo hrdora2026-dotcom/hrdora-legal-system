@@ -58,6 +58,7 @@ function NewBill() {
   const [submissionDate, setSubmissionDate] = useState(todayIST());
   const [submissionRef, setSubmissionRef] = useState("");
 
+
   const [items, setItems] = useState<Item[]>(() => [blankItem()]);
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
@@ -74,7 +75,29 @@ function NewBill() {
     if (items.some((i) => !/^\d+(\.\d{1,2})?$/.test(i.quantity) || Number(i.quantity) <= 0 || !/^\d+(\.\d{1,2})?$/.test(i.rate))) return toast.error("Use a positive quantity and nonnegative rate, with up to two decimal places.");
     lock.current = true; setBusy(true);
     try {
-      const { data, error } = await supabase.rpc("create_bill", { _opinion_id: op.id, _bill_date: date, _remarks: remarks, _items: items.map(({ category, description, quantity, rate }) => ({ category, description, quantity, rate })), _finalize: finalize, _key: key.current, _allow_additional: allowAdditional });
+
+      const { data, error } = await supabase.rpc("create_bill", {
+        _opinion_id: op.id,
+        _bill_date: date,
+        _remarks: remarks,
+        _items: items.map(({ category, description, quantity, rate }) => ({
+          category,
+          description,
+          quantity,
+          rate,
+        })),
+        _finalize: finalize,
+        _key: key.current,
+        _allow_additional: allowAdditional,
+        _submission_status: submissionChoice,
+        _submission_date:
+          submissionChoice === "submitted" ? submissionDate : null,
+        _submission_ref:
+          submissionChoice === "submitted"
+            ? submissionRef.trim() || null
+            : null,
+      });
+
       if (error) throw error;
       if (!data) throw new Error("The bill could not be saved.");
       await qc.invalidateQueries({ queryKey: ["bill_summary"] });

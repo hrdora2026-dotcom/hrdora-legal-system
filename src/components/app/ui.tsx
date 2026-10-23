@@ -138,7 +138,15 @@ export function DataTable({ head, children, empty }: { head: ReactNode[]; childr
         <thead className="bg-muted text-left text-xs uppercase tracking-wide text-muted-foreground">
           <tr>
             {head.map((h, i) => (
-              <th key={i} className="whitespace-nowrap px-3 py-2 font-semibold">
+              <th
+                key={i}
+                className={cn(
+                  "whitespace-nowrap px-3 py-2 font-semibold",
+                  i === 0 && "sticky left-0 z-30 min-w-16 border-r bg-muted",
+                  i === 1 && "sticky left-16 z-30 min-w-40 border-r bg-muted",
+                  i === 2 && "sticky left-56 z-30 min-w-48 border-r bg-muted",
+                )}
+              >
                 {h}
               </th>
             ))}
